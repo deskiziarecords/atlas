@@ -5,35 +5,40 @@ from .neurometal import NeurometalEngine
 from ..graph.ferros import FerrosGraph
 from ..vector.tungsten import TungstenVector
 from ..fusion.synth_fuse import SynthFuseEngine
+from ..registry.system import SystemRegistry
 
 class AtlasOrchestrator(AsyncComponent):
     """
     Universal Database Orchestrator (THE "FATHER").
     Coordinate everything: query planning, adapter orchestration, system routing, ingestion pipeline.
+
+    This Orchestrator operates as a standalone service that sub-systems register to
+    or are managed by. It maintains the high-level logic and routing.
     """
     def __init__(self):
+        self.registry = SystemRegistry()
+
+        # Internal sub-system instances
         self.platinum = PlatinumExtractor()
         self.neurometal = NeurometalEngine()
         self.ferros = FerrosGraph()
         self.tungsten = TungstenVector()
         self.synth_fuse = SynthFuseEngine()
-        self.systems = [
-            self.platinum,
-            self.neurometal,
-            self.ferros,
-            self.tungsten,
-            self.synth_fuse
-        ]
+
+        # Register them
+        self.registry.register("platinum", self.platinum)
+        self.registry.register("neurometal", self.neurometal)
+        self.registry.register("ferros", self.ferros)
+        self.registry.register("tungsten", self.tungsten)
+        self.registry.register("synth_fuse", self.synth_fuse)
 
     async def start(self):
         print("ATLAS Orchestrator starting...")
-        for system in self.systems:
-            await system.start()
+        await self.registry.start_all()
 
     async def stop(self):
         print("ATLAS Orchestrator stopping...")
-        for system in self.systems:
-            await system.stop()
+        await self.registry.stop_all()
 
     async def plan_query(self, query):
         """Plans a query across the available sub-systems."""
@@ -71,15 +76,7 @@ class AtlasOrchestrator(AsyncComponent):
         """Routes a specific task to one of the managed sub-systems."""
         print(f"Routing task to {target_system_name}")
 
-        system_map = {
-            "platinum": self.platinum,
-            "neurometal": self.neurometal,
-            "ferros": self.ferros,
-            "tungsten": self.tungsten,
-            "synth_fuse": self.synth_fuse
-        }
-
-        system = system_map.get(target_system_name.lower())
+        system = self.registry.get(target_system_name)
         if not system:
             raise ValueError(f"Unknown system: {target_system_name}")
 
